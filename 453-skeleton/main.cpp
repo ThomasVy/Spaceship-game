@@ -1,0 +1,425 @@
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+
+#include <iostream>
+#include <string>
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+#include "Geometry.h"
+#include "GLDebug.h"
+#include "Log.h"
+#include "ShaderProgram.h"
+#include "Shader.h"
+#include "Texture.h"
+#include "Window.h"
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
+#include "glm/gtc/type_ptr.hpp"
+
+CPU_Geometry createGeom() {
+	CPU_Geometry retGeom;
+
+	// For full marks (Part IV), you'll need to use the following vertex coordinates instead.
+	// Then, you'd get the correct scale/translation/rotation by passing in uniforms into
+	// the vertex shader.
+	retGeom.verts.push_back(glm::vec3(-1.f, 1.f, 0.f));
+	retGeom.verts.push_back(glm::vec3(-1.f, -1.f, 0.f));
+	retGeom.verts.push_back(glm::vec3(1.f, -1.f, 0.f));
+	retGeom.verts.push_back(glm::vec3(-1.f, 1.f, 0.f));
+	retGeom.verts.push_back(glm::vec3(1.f, -1.f, 0.f));
+	retGeom.verts.push_back(glm::vec3(1.f, 1.f, 0.f));
+
+
+	// texture coordinates
+	retGeom.texCoords.push_back(glm::vec2(0.f, 1.f));
+	retGeom.texCoords.push_back(glm::vec2(0.f, 0.f));
+	retGeom.texCoords.push_back(glm::vec2(1.f, 0.f));
+	retGeom.texCoords.push_back(glm::vec2(0.f, 1.f));
+	retGeom.texCoords.push_back(glm::vec2(1.f, 0.f));
+	retGeom.texCoords.push_back(glm::vec2(1.f, 1.f));
+	return retGeom;
+}
+
+// An example struct for Game Objects.
+// You are encouraged to customize this as you see fit.
+struct GameObject {
+	// Struct's constructor deals with the texture.
+	// Also sets default position, theta, scale, and transformationMatrix
+	GameObject(const std::string& texturePath,
+		const GLenum textureInterpolation,
+		const glm::mat4& startingTransformationMatrix)
+		: cgeom(createGeom()),
+		texture(texturePath, textureInterpolation),
+		originalTransformationMatrix(startingTransformationMatrix),
+		transformationMatrix(startingTransformationMatrix)
+	{
+		ggeom.setVerts(cgeom.verts);
+		ggeom.setTexCoords(cgeom.texCoords);
+	}
+
+	void reset()
+	{
+		transformationMatrix = originalTransformationMatrix;
+		isVisible = true;
+	}
+
+	void draw(ShaderProgram& shader)
+	{
+		GLint transformationMatrixLocation = glGetUniformLocation(shader.getProgram(), "transformationMatrix");
+		glUniformMatrix4fv(transformationMatrixLocation, 1, GL_FALSE, glm::value_ptr(transformationMatrix));
+		ggeom.bind();
+		texture.bind();
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		texture.unbind();
+	}
+
+	glm::vec4 getPosition()
+	{
+		return  transformationMatrix * position;
+	}
+
+	glm::vec4 getHeading()
+	{
+		return  transformationMatrix * heading;
+	}
+
+	const CPU_Geometry cgeom;
+	GPU_Geometry ggeom;
+	Texture texture;
+
+	glm::mat4 transformationMatrix;
+	bool isVisible = true;
+
+private:
+	const glm::mat4 originalTransformationMatrix;
+	const glm::vec4 position = { 0.f, 0.f, 0.f, 1.f };
+	const glm::vec4 heading = { 0.f, 0.5f, 0.f, 0.f };
+
+};
+
+enum class MovementDirection
+{
+	NoMovement,
+	Forward,
+	Backward
+};
+
+// EXAMPLE CALLBACKS
+class MyCallbacks : public CallbackInterface {
+
+public:
+	MyCallbacks(ShaderProgram& shader) : shader(shader) {}
+
+	void keyCallback(int key, int scancode, int action, int mods) override
+	{
+		if (key == GLFW_KEY_R && action == GLFW_PRESS)
+		{
+			restartFlag = true;
+		}
+		if (key == GLFW_KEY_W && (action == GLFW_PRESS))
+		{
+			setMovement(MovementDirection::Forward);
+		}
+		if (key == GLFW_KEY_S && (action == GLFW_PRESS))
+		{
+			setMovement(MovementDirection::Backward);
+		}
+	}
+
+	void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) override
+	{
+		if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+		{
+			double xpos, ypos;
+			int width, height;
+			glfwGetWindowSize(window, &width, &height);
+			glfwGetCursorPos(window, &xpos, &ypos);
+
+			//From MouseInput Tutorial on D2L
+			glm::vec2 startingVec((float)xpos, (float)ypos);
+			glm::vec2 shiftedVec = startingVec + glm::vec2(0.5f);
+			glm::vec2 scaledToZeroOne = shiftedVec / glm::vec2(width, height);
+			glm::vec2 flippedY = glm::vec2(scaledToZeroOne.x, 1.0f - scaledToZeroOne.y);
+			glm::vec2 final = flippedY * 2.0f - glm::vec2(1.0f);
+			clickedMousePosition = { final.x, final.y, 0.f, 1.f };
+		}
+	}
+
+	glm::vec4 getClickedMousePosition() const
+	{
+		return clickedMousePosition;
+	}
+
+	MovementDirection getMovement() const
+	{
+		return movement;
+	}
+
+	bool getRestartFlag() const
+	{
+		return restartFlag;
+	}
+
+	void setMovement(MovementDirection movementDir)
+	{
+		movement = movementDir;
+	}
+
+	void reset()
+	{
+		restartFlag = false;
+		clickedMousePosition = { 0, 0, 0, 1 };
+		movement = MovementDirection::NoMovement;
+	}
+
+private:
+	bool restartFlag = false;
+	glm::vec4 clickedMousePosition = { 0, 0, 0, 1 };
+	ShaderProgram& shader;
+	MovementDirection movement = MovementDirection::NoMovement;
+};
+
+// END EXAMPLES
+
+int main() {
+	Log::debug("Starting main");
+
+	// WINDOW
+	glfwInit();
+	Window window(800, 800, "CPSC 453"); // can set callbacks at construction if desired
+
+	GLDebug::enable();
+
+	// SHADERS
+	ShaderProgram shader("shaders/test.vert", "shaders/test.frag");
+
+	// CALLBACKS
+	auto callbacks = std::make_shared<MyCallbacks>(shader);
+	window.setCallbacks(callbacks); // can also update callbacks to new ones
+
+	// GL_NEAREST looks a bit better for low-res pixel art than GL_LINEAR.
+	// But for most other cases, you'd want GL_LINEAR interpolation.
+	auto ship = std::make_unique<GameObject>(
+		"textures/ship.png",
+		GL_NEAREST,
+		glm::mat4{
+			0.09f, 0.f, 0.f, 0.f,
+			0.f, 0.06f, 0.f, 0.f,
+			0.f, 0.f, 1.f, 0.f,
+			0.f, 0.f, 0.f, 1.f
+		}
+	);
+
+	std::vector<std::shared_ptr<GameObject>> gems;
+	srand(3);
+	const unsigned maxDiamonds = 4;
+	for (unsigned diamondIndex = 0; diamondIndex < maxDiamonds; diamondIndex++)
+	{
+		double randomX = rand()*1.5/ RAND_MAX - 0.75;
+		double randomY = rand()*1.5/ RAND_MAX - 0.75;
+		auto diamond = std::make_shared<GameObject>(
+			"textures/diamond.png",
+			GL_NEAREST,
+			glm::mat4{
+				0.07f, 0.f, 0.f, 0.f,
+				0.f, 0.07f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				randomX, randomY, 0.f, 1.f
+			}
+		);
+		gems.push_back(diamond);
+	}
+
+	// RENDER LOOP
+	glm::vec4 clickedMousePos = { 0, 0, 0, 1 };
+	const unsigned maxAnimationFrames = 10;
+	unsigned animationCurrentFrame = maxAnimationFrames;
+	int score = 0;
+	glm::mat4 accumulatedMatrix(1.f);
+	while (!window.shouldClose()) {
+		glfwPollEvents();
+
+		if (callbacks->getRestartFlag() == true)
+		{
+			score = 0;
+			clickedMousePos = { 0, 0, 0, 1 };
+			callbacks->reset();
+			animationCurrentFrame = maxAnimationFrames;
+			ship->reset();
+			for (auto& gem : gems)
+			{
+				gem->reset();
+			}
+		}
+		if (animationCurrentFrame >= maxAnimationFrames)
+		{
+			//clear the accumulated matrix to stop animating
+			accumulatedMatrix = {
+				1.f, 0.f, 0.f, 0.f,
+				0.f, 1.f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				0.f,  0.f, 0.f, 1.f
+			};
+		}
+
+		if (callbacks->getMovement() != MovementDirection::NoMovement)
+		{
+			animationCurrentFrame = 1;
+			glm::mat4 translationMatrix;
+			glm::vec4 headingUnitVector = ship->getHeading() / (glm::length(ship->getHeading()) * 5 * maxAnimationFrames);
+			if (callbacks->getMovement() == MovementDirection::Forward)
+			{
+				translationMatrix = {
+					1.f, 0.f, 0.f, 0.f,
+					0.f, 1.f, 0.f, 0.f,
+					0.f, 0.f, 1.f, 0.f,
+					headingUnitVector.x, headingUnitVector.y, 0.f, 1.f
+				};
+			}
+			else if (callbacks->getMovement() == MovementDirection::Backward)
+			{
+				translationMatrix = {
+					1.f, 0.f, 0.f, 0.f,
+					0.f, 1.f, 0.f, 0.f,
+					0.f, 0.f, 1.f, 0.f,
+					-headingUnitVector.x, -headingUnitVector.y, 0.f, 1.f
+				};
+			}
+			accumulatedMatrix = translationMatrix * accumulatedMatrix;
+			callbacks->setMovement(MovementDirection::NoMovement);
+		}
+
+		if (callbacks->getClickedMousePosition() != clickedMousePos)
+		{
+			animationCurrentFrame = 1;
+			clickedMousePos = callbacks->getClickedMousePosition();
+
+			glm::vec4 shipHeading = ship->getHeading();
+			glm::vec4 shipPosition = ship->getPosition();
+			glm::vec4 newHeading = clickedMousePos - ship->getPosition();
+			newHeading /= glm::length(newHeading);
+
+			float rotationInRadians = acos(glm::dot(shipHeading, newHeading) / (glm::length(shipHeading) * glm::length(newHeading)));
+			rotationInRadians /= maxAnimationFrames;
+			glm::vec3 crossProduct = glm::cross(glm::vec3(shipHeading), glm::vec3(newHeading));
+			if (crossProduct.z < 0)
+			{
+				rotationInRadians *= -1;
+			}
+
+			glm::mat4 rotationMatrix = {
+				cos(rotationInRadians), sin(rotationInRadians), 0.f, 0.f,
+				-sin(rotationInRadians), cos(rotationInRadians), 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				0.f, 0.f, 0.f, 1.f,
+			};
+			glm::mat4 negativeTranslation = {
+				1.f, 0.f, 0.f, 0.f,
+				0.f, 1.f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				-shipPosition.x, -shipPosition.y, 0.f, 1.f
+			};
+			glm::mat4 positiveTranslation = {
+				1.f, 0.f, 0.f, 0.f,
+				0.f, 1.f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				shipPosition.x, shipPosition.y, 0.f, 1.f
+			};
+			accumulatedMatrix = positiveTranslation * rotationMatrix * negativeTranslation * accumulatedMatrix;
+		}
+
+		shader.use();
+		glEnable(GL_FRAMEBUFFER_SRGB);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		for (auto& gem : gems)
+		{
+			if (gem->isVisible)
+			{
+				gem->draw(shader);
+				glm::vec3 vectorBetweenShipAndGem = glm::vec3(gem->getPosition()) - glm::vec3(ship->getPosition());
+				float lengthBetweenShipAndGem = glm::length(vectorBetweenShipAndGem);
+				if (lengthBetweenShipAndGem <= 0.14)
+				{
+					score++;
+					glm::mat4 scalingMatrix = {
+						1.3f, 0.f, 0.f, 0.f,
+						0.f, 1.3f, 0.f, 0.f,
+						0.f, 0.f, 1.f, 0.f,
+						0.f, 0.f, 0.f, 1.f
+					};
+					glm::vec4 shipPosition = ship->getPosition();
+					glm::mat4 negativeTranslation = {
+						1.f, 0.f, 0.f, 0.f,
+						0.f, 1.f, 0.f, 0.f,
+						0.f, 0.f, 1.f, 0.f,
+						-shipPosition.x, -shipPosition.y, 0.f, 1.f
+					};
+					glm::mat4 positiveTranslation = {
+						1.f, 0.f, 0.f, 0.f,
+						0.f, 1.f, 0.f, 0.f,
+						0.f, 0.f, 1.f, 0.f,
+						shipPosition.x, shipPosition.y, 0.f, 1.f
+					};
+					ship->transformationMatrix = positiveTranslation * scalingMatrix * negativeTranslation * ship->transformationMatrix;
+					gem->isVisible = false;
+				}
+			}
+		}
+		ship->transformationMatrix = accumulatedMatrix * ship->transformationMatrix;
+		ship->draw(shader);
+		animationCurrentFrame++;
+
+		glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
+
+
+		// Starting the new ImGui frame
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+		// Putting the text-containing window in the top-left of the screen.
+		ImGui::SetNextWindowPos(ImVec2(5, 5));
+
+		// Setting flags
+		ImGuiWindowFlags textWindowFlags =
+			ImGuiWindowFlags_NoMove |				// text "window" should not move
+			ImGuiWindowFlags_NoResize |				// should not resize
+			ImGuiWindowFlags_NoCollapse |			// should not collapse
+			ImGuiWindowFlags_NoSavedSettings |		// don't want saved settings mucking things up
+			ImGuiWindowFlags_AlwaysAutoResize |		// window should auto-resize to fit the text
+			ImGuiWindowFlags_NoBackground |			// window should be transparent; only the text should be visible
+			ImGuiWindowFlags_NoDecoration |			// no decoration; only the text should be visible
+			ImGuiWindowFlags_NoTitleBar;			// no title; only the text should be visible
+
+		// Begin a new window with these flags. (bool *)0 is the "default" value for its argument.
+		ImGui::Begin("scoreText", (bool*)0, textWindowFlags);
+
+		// Scale up text a little, and set its value
+		ImGui::SetWindowFontScale(1.5f);
+		ImGui::Text("Score: %d", score); // Second parameter gets passed into "%d"
+		if (score >= maxDiamonds)
+		{
+			ImGui::SetWindowFontScale(5.f);
+			ImGui::Text("You Win!"); 
+			ImGui::Text("Press R to restart");
+		}
+
+		// End the window.
+		ImGui::End();
+
+		ImGui::Render();	// Render the ImGui window
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); // Some middleware thing
+
+		window.swapBuffers();
+	}
+	// ImGui cleanup
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	glfwTerminate();
+	return 0;
+}
