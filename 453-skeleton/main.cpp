@@ -17,7 +17,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
-#include "glm/gtc/type_ptr.hpp"
 
 CPU_Geometry createGeom() {
 	CPU_Geometry retGeom;
@@ -164,6 +163,80 @@ private:
 	MovementDirection movement = MovementDirection::NoMovement;
 };
 
+glm::mat4 callbackMovementCalculations( std::shared_ptr<MyCallbacks> callbacks,
+								const unsigned maxAnimationFrames,
+								unsigned& animationCurrentFrame,
+								glm::vec4& clickedMousePos,
+								std::shared_ptr<GameObject> ship)
+{
+	glm::mat4 accumulatedMatrix(1.f);
+	if (callbacks->getMovement() != MovementDirection::NoMovement)
+	{
+		animationCurrentFrame = 1;
+		glm::mat4 translationMatrix;
+		glm::vec4 headingUnitVector = ship->getHeading() / (glm::length(ship->getHeading()) * 5*  maxAnimationFrames);
+		if (callbacks->getMovement() == MovementDirection::Forward)
+		{
+			translationMatrix = {
+				1.f, 0.f, 0.f, 0.f,
+				0.f, 1.f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				headingUnitVector.x, headingUnitVector.y, 0.f, 1.f
+			};
+		}
+		else if (callbacks->getMovement() == MovementDirection::Backward)
+		{
+			translationMatrix = {
+				1.f, 0.f, 0.f, 0.f,
+				0.f, 1.f, 0.f, 0.f,
+				0.f, 0.f, 1.f, 0.f,
+				-headingUnitVector.x, -headingUnitVector.y, 0.f, 1.f
+			};
+		}
+		accumulatedMatrix = translationMatrix * accumulatedMatrix;
+		callbacks->setMovement(MovementDirection::NoMovement);
+	}
+
+	if (callbacks->getClickedMousePosition() != clickedMousePos)
+	{
+		animationCurrentFrame = 1;
+		clickedMousePos = callbacks->getClickedMousePosition();
+
+		glm::vec4 shipHeading = ship->getHeading();
+		glm::vec4 shipPosition = ship->getPosition();
+		glm::vec4 newHeading = clickedMousePos - ship->getPosition();
+		newHeading /= glm::length(newHeading);
+
+		float rotationInRadians = acos(glm::dot(shipHeading, newHeading) / (glm::length(shipHeading) * glm::length(newHeading)));
+		rotationInRadians /= maxAnimationFrames;
+		glm::vec3 crossProduct = glm::cross(glm::vec3(shipHeading), glm::vec3(newHeading));
+		if (crossProduct.z < 0)
+		{
+			rotationInRadians *= -1;
+		}
+
+		glm::mat4 rotationMatrix = {
+			cos(rotationInRadians), sin(rotationInRadians), 0.f, 0.f,
+			-sin(rotationInRadians), cos(rotationInRadians), 0.f, 0.f,
+			0.f, 0.f, 1.f, 0.f,
+			0.f, 0.f, 0.f, 1.f,
+		};
+		glm::mat4 negativeTranslation = {
+			1.f, 0.f, 0.f, 0.f,
+			0.f, 1.f, 0.f, 0.f,
+			0.f, 0.f, 1.f, 0.f,
+			-shipPosition.x, -shipPosition.y, 0.f, 1.f
+		};
+		glm::mat4 positiveTranslation = {
+			1.f, 0.f, 0.f, 0.f,
+			0.f, 1.f, 0.f, 0.f,
+			0.f, 0.f, 1.f, 0.f,
+			shipPosition.x, shipPosition.y, 0.f, 1.f
+		};
+		accumulatedMatrix = positiveTranslation * rotationMatrix * negativeTranslation * accumulatedMatrix;
+	}
+	return accumulatedMatrix;
+}
 // END EXAMPLES
 
 int main() {
@@ -186,11 +259,13 @@ int main() {
 	// But for most other cases, you'd want GL_LINEAR interpolation.
 	const unsigned maxDiamonds = 4;
 	unsigned objectsOnScreen = maxDiamonds + 1;
+
+	//OpenGL Draw Instancing variables
 	GPU_Geometry ggeom;
-	std::vector<glm::vec3> positions;
-	std::vector<glm::vec2> texCoords;
-	std::vector<float> texIds;
-	auto ship = std::make_unique<GameObject>(
+	std::vector<glm::vec3> positions; //This is used to collect all the vert positions to feed them in the draw instancing
+	std::vector<glm::vec2> texCoords; //This is used to collect all the tex coords to feed them in the draw instancing
+	std::vector<float> texIds; //This is the colleciton of texture ids for all objects on screen
+	auto ship = std::make_shared<GameObject>(
 		glm::mat4{
 			0.09f, 0.f, 0.f, 0.f,
 			0.f, 0.06f, 0.f, 0.f,
@@ -242,6 +317,8 @@ int main() {
 	glBindTextureUnit(1, diamondTexture.getTextureID());
 
 	while (!window.shouldClose()) {
+		glEnable(GL_FRAMEBUFFER_SRGB);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glfwPollEvents();
 
 		if (callbacks->getRestartFlag() == true)
@@ -267,76 +344,12 @@ int main() {
 				0.f,  0.f, 0.f, 1.f
 			};
 		}
-
-		if (callbacks->getMovement() != MovementDirection::NoMovement)
-		{
-			animationCurrentFrame = 1;
-			glm::mat4 translationMatrix;
-			glm::vec4 headingUnitVector = ship->getHeading() / (glm::length(ship->getHeading()) * 5 * maxAnimationFrames);
-			if (callbacks->getMovement() == MovementDirection::Forward)
-			{
-				translationMatrix = {
-					1.f, 0.f, 0.f, 0.f,
-					0.f, 1.f, 0.f, 0.f,
-					0.f, 0.f, 1.f, 0.f,
-					headingUnitVector.x, headingUnitVector.y, 0.f, 1.f
-				};
-			}
-			else if (callbacks->getMovement() == MovementDirection::Backward)
-			{
-				translationMatrix = {
-					1.f, 0.f, 0.f, 0.f,
-					0.f, 1.f, 0.f, 0.f,
-					0.f, 0.f, 1.f, 0.f,
-					-headingUnitVector.x, -headingUnitVector.y, 0.f, 1.f
-				};
-			}
-			accumulatedMatrix = translationMatrix * accumulatedMatrix;
-			callbacks->setMovement(MovementDirection::NoMovement);
-		}
-
-		if (callbacks->getClickedMousePosition() != clickedMousePos)
-		{
-			animationCurrentFrame = 1;
-			clickedMousePos = callbacks->getClickedMousePosition();
-
-			glm::vec4 shipHeading = ship->getHeading();
-			glm::vec4 shipPosition = ship->getPosition();
-			glm::vec4 newHeading = clickedMousePos - ship->getPosition();
-			newHeading /= glm::length(newHeading);
-
-			float rotationInRadians = acos(glm::dot(shipHeading, newHeading) / (glm::length(shipHeading) * glm::length(newHeading)));
-			rotationInRadians /= maxAnimationFrames;
-			glm::vec3 crossProduct = glm::cross(glm::vec3(shipHeading), glm::vec3(newHeading));
-			if (crossProduct.z < 0)
-			{
-				rotationInRadians *= -1;
-			}
-
-			glm::mat4 rotationMatrix = {
-				cos(rotationInRadians), sin(rotationInRadians), 0.f, 0.f,
-				-sin(rotationInRadians), cos(rotationInRadians), 0.f, 0.f,
-				0.f, 0.f, 1.f, 0.f,
-				0.f, 0.f, 0.f, 1.f,
-			};
-			glm::mat4 negativeTranslation = {
-				1.f, 0.f, 0.f, 0.f,
-				0.f, 1.f, 0.f, 0.f,
-				0.f, 0.f, 1.f, 0.f,
-				-shipPosition.x, -shipPosition.y, 0.f, 1.f
-			};
-			glm::mat4 positiveTranslation = {
-				1.f, 0.f, 0.f, 0.f,
-				0.f, 1.f, 0.f, 0.f,
-				0.f, 0.f, 1.f, 0.f,
-				shipPosition.x, shipPosition.y, 0.f, 1.f
-			};
-			accumulatedMatrix = positiveTranslation * rotationMatrix * negativeTranslation * accumulatedMatrix;
-		}
-
-		glEnable(GL_FRAMEBUFFER_SRGB);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+		accumulatedMatrix *= callbackMovementCalculations(callbacks,
+			maxAnimationFrames,
+			animationCurrentFrame,
+			clickedMousePos,
+			ship
+		);
 		ship->transformationMatrix = accumulatedMatrix * ship->transformationMatrix;
 		std::vector<glm::mat4> modelMatrices;
 		modelMatrices.push_back(ship->transformationMatrix);
@@ -349,7 +362,6 @@ int main() {
 				float lengthBetweenShipAndGem = glm::length(vectorBetweenShipAndGem);
 				if (lengthBetweenShipAndGem <= 0.14)
 				{
-					score++;
 					glm::mat4 scalingMatrix = {
 						1.3f, 0.f, 0.f, 0.f,
 						0.f, 1.3f, 0.f, 0.f,
@@ -371,6 +383,7 @@ int main() {
 					};
 					ship->transformationMatrix = positiveTranslation * scalingMatrix * negativeTranslation * ship->transformationMatrix;
 					gem->isVisible = false;
+					score++;
 					objectsOnScreen--;
 				}
 			}
