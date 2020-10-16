@@ -48,32 +48,17 @@ CPU_Geometry createGeom() {
 struct GameObject {
 	// Struct's constructor deals with the texture.
 	// Also sets default position, theta, scale, and transformationMatrix
-	GameObject(const std::string& texturePath,
-		const GLenum textureInterpolation,
-		const glm::mat4& startingTransformationMatrix)
+	GameObject(const glm::mat4& startingTransformationMatrix)
 		: cgeom(createGeom()),
-		texture(texturePath, textureInterpolation),
 		originalTransformationMatrix(startingTransformationMatrix),
 		transformationMatrix(startingTransformationMatrix)
 	{
-		ggeom.setVerts(cgeom.verts);
-		ggeom.setTexCoords(cgeom.texCoords);
 	}
 
 	void reset()
 	{
 		transformationMatrix = originalTransformationMatrix;
 		isVisible = true;
-	}
-
-	void draw(ShaderProgram& shader)
-	{
-		GLint transformationMatrixLocation = glGetUniformLocation(shader.getProgram(), "transformationMatrix");
-		glUniformMatrix4fv(transformationMatrixLocation, 1, GL_FALSE, glm::value_ptr(transformationMatrix));
-		ggeom.bind();
-		texture.bind();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
-		texture.unbind();
 	}
 
 	glm::vec4 getPosition()
@@ -87,9 +72,6 @@ struct GameObject {
 	}
 
 	const CPU_Geometry cgeom;
-	GPU_Geometry ggeom;
-	Texture texture;
-
 	glm::mat4 transformationMatrix;
 	bool isVisible = true;
 
@@ -202,9 +184,13 @@ int main() {
 
 	// GL_NEAREST looks a bit better for low-res pixel art than GL_LINEAR.
 	// But for most other cases, you'd want GL_LINEAR interpolation.
+	const unsigned maxDiamonds = 4;
+	unsigned objectsOnScreen = maxDiamonds + 1;
+	GPU_Geometry ggeom;
+	std::vector<glm::vec3> positions;
+	std::vector<glm::vec2> texCoords;
+	std::vector<float> texIds;
 	auto ship = std::make_unique<GameObject>(
-		"textures/ship.png",
-		GL_NEAREST,
 		glm::mat4{
 			0.09f, 0.f, 0.f, 0.f,
 			0.f, 0.06f, 0.f, 0.f,
@@ -212,17 +198,17 @@ int main() {
 			0.f, 0.f, 0.f, 1.f
 		}
 	);
+	positions.insert(positions.end(), ship->cgeom.verts.begin(), ship->cgeom.verts.end());
+	texCoords.insert(texCoords.end(), ship->cgeom.texCoords.begin(), ship->cgeom.texCoords.end());
+	texIds.push_back(0);
 
 	std::vector<std::shared_ptr<GameObject>> gems;
 	srand(3);
-	const unsigned maxDiamonds = 4;
 	for (unsigned diamondIndex = 0; diamondIndex < maxDiamonds; diamondIndex++)
 	{
 		double randomX = rand()*1.5/ RAND_MAX - 0.75;
 		double randomY = rand()*1.5/ RAND_MAX - 0.75;
 		auto diamond = std::make_shared<GameObject>(
-			"textures/diamond.png",
-			GL_NEAREST,
 			glm::mat4{
 				0.07f, 0.f, 0.f, 0.f,
 				0.f, 0.07f, 0.f, 0.f,
@@ -231,7 +217,13 @@ int main() {
 			}
 		);
 		gems.push_back(diamond);
+		positions.insert(positions.end(), diamond->cgeom.verts.begin(), diamond->cgeom.verts.end());
+		texCoords.insert(texCoords.end(), diamond->cgeom.texCoords.begin(), diamond->cgeom.texCoords.end());
+		texIds.push_back(1);
 	}
+	ggeom.setTexCoords(texCoords);
+	ggeom.setVerts(positions);
+	ggeom.setTextureID(texIds);
 
 	// RENDER LOOP
 	glm::vec4 clickedMousePos = { 0, 0, 0, 1 };
@@ -239,12 +231,23 @@ int main() {
 	unsigned animationCurrentFrame = maxAnimationFrames;
 	int score = 0;
 	glm::mat4 accumulatedMatrix(1.f);
+
+	shader.use();
+	auto loc = glGetUniformLocation(shader.getProgram(), "samplers");
+	int samplers[2] = { 0, 1 };
+	glUniform1iv(loc, 2, samplers);
+	Texture shipTexture("textures/ship.png", GL_NEAREST);
+	Texture diamondTexture("textures/diamond.png", GL_NEAREST);
+	glBindTextureUnit(0, shipTexture.getTextureID());
+	glBindTextureUnit(1, diamondTexture.getTextureID());
+
 	while (!window.shouldClose()) {
 		glfwPollEvents();
 
 		if (callbacks->getRestartFlag() == true)
 		{
 			score = 0;
+			objectsOnScreen = maxDiamonds + 1;
 			clickedMousePos = { 0, 0, 0, 1 };
 			callbacks->reset();
 			animationCurrentFrame = maxAnimationFrames;
@@ -331,15 +334,17 @@ int main() {
 			accumulatedMatrix = positiveTranslation * rotationMatrix * negativeTranslation * accumulatedMatrix;
 		}
 
-		shader.use();
 		glEnable(GL_FRAMEBUFFER_SRGB);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		ship->transformationMatrix = accumulatedMatrix * ship->transformationMatrix;
+		std::vector<glm::mat4> modelMatrices;
+		modelMatrices.push_back(ship->transformationMatrix);
 		for (auto& gem : gems)
 		{
 			if (gem->isVisible)
 			{
-				gem->draw(shader);
+				modelMatrices.push_back(gem->transformationMatrix);
 				glm::vec3 vectorBetweenShipAndGem = glm::vec3(gem->getPosition()) - glm::vec3(ship->getPosition());
 				float lengthBetweenShipAndGem = glm::length(vectorBetweenShipAndGem);
 				if (lengthBetweenShipAndGem <= 0.14)
@@ -366,11 +371,15 @@ int main() {
 					};
 					ship->transformationMatrix = positiveTranslation * scalingMatrix * negativeTranslation * ship->transformationMatrix;
 					gem->isVisible = false;
+					objectsOnScreen--;
 				}
 			}
 		}
-		ship->transformationMatrix = accumulatedMatrix * ship->transformationMatrix;
-		ship->draw(shader);
+		
+		ggeom.setMatrixTrans(modelMatrices);
+		ggeom.bind();
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, objectsOnScreen);
+		
 		animationCurrentFrame++;
 
 		glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui

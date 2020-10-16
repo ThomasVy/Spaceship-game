@@ -29,6 +29,8 @@ public:
 	void bind() { glBindTexture(GL_TEXTURE_2D, textureID); }
 	void unbind() { glBindTexture(GL_TEXTURE_2D, textureID); }
 
+	GLuint getTextureID() { return textureID.value(); }
+	
 private:
 	TextureHandle textureID;
 	std::string path;

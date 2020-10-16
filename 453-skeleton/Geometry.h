@@ -33,7 +33,8 @@ public:
 
 	void setVerts(const std::vector<glm::vec3>& verts);
 	void setTexCoords(const std::vector<glm::vec2>& texCoords);
-
+	void setMatrixTrans(const std::vector<glm::mat4>& matrixTrans);
+	void setTextureID(const std::vector<float>& textureIds);
 private:
 	// note: due to how OpenGL works, vao needs to be 
 	// defined and initialized before the vertex buffers
@@ -41,4 +42,6 @@ private:
 
 	VertexBuffer vertBuffer;
 	VertexBuffer texCoordBuffer;
+	VertexBuffer textureIDBuffer;
+	VertexBuffer transformationMatrix;
 };

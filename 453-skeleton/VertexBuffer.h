@@ -8,8 +8,8 @@
 class VertexBuffer {
 
 public:
-	VertexBuffer(GLuint index, GLint size, GLenum dataType);
-
+	VertexBuffer(GLuint index, GLint size, GLenum dataType, GLuint divisor = 0);
+	VertexBuffer(GLuint beginIndex, GLuint vec4Size, GLuint matrixSize, GLint size, GLenum dataType);
 	// Because we're using the VertexBufferHandle to do RAII for the buffer for us
 	// and our other types are trivial or provide their own RAII
 	// we don't have to provide any specialized functions here. Rule of zero
