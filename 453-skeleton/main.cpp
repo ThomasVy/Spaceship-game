@@ -48,9 +48,8 @@ struct GameObject {
 	// Struct's constructor deals with the texture.
 	// Also sets default position, theta, scale, and transformationMatrix
 	GameObject(const glm::mat4& startingTransformationMatrix)
-		: cgeom(createGeom()),
-		originalTransformationMatrix(startingTransformationMatrix),
-		transformationMatrix(startingTransformationMatrix)
+		: originalTransformationMatrix(startingTransformationMatrix),
+		  transformationMatrix(startingTransformationMatrix)
 	{
 	}
 
@@ -70,7 +69,6 @@ struct GameObject {
 		return  transformationMatrix * heading;
 	}
 
-	const CPU_Geometry cgeom;
 	glm::mat4 transformationMatrix;
 	bool isVisible = true;
 
@@ -261,9 +259,6 @@ int main() {
 	unsigned objectsOnScreen = maxDiamonds + 1;
 
 	//OpenGL Draw Instancing variables
-	GPU_Geometry ggeom;
-	std::vector<glm::vec3> positions; //This is used to collect all the vert positions to feed them in the draw instancing
-	std::vector<glm::vec2> texCoords; //This is used to collect all the tex coords to feed them in the draw instancing
 	std::vector<float> texIds; //This is the colleciton of texture ids for all objects on screen
 	auto ship = std::make_shared<GameObject>(
 		glm::mat4{
@@ -273,8 +268,6 @@ int main() {
 			0.f, 0.f, 0.f, 1.f
 		}
 	);
-	positions.insert(positions.end(), ship->cgeom.verts.begin(), ship->cgeom.verts.end());
-	texCoords.insert(texCoords.end(), ship->cgeom.texCoords.begin(), ship->cgeom.texCoords.end());
 	texIds.push_back(0);
 
 	std::vector<std::shared_ptr<GameObject>> gems;
@@ -292,12 +285,12 @@ int main() {
 			}
 		);
 		gems.push_back(diamond);
-		positions.insert(positions.end(), diamond->cgeom.verts.begin(), diamond->cgeom.verts.end());
-		texCoords.insert(texCoords.end(), diamond->cgeom.texCoords.begin(), diamond->cgeom.texCoords.end());
 		texIds.push_back(1);
 	}
-	ggeom.setTexCoords(texCoords);
-	ggeom.setVerts(positions);
+	const CPU_Geometry cgeom = createGeom();
+	GPU_Geometry ggeom;
+	ggeom.setVerts(cgeom.verts);
+	ggeom.setTexCoords(cgeom.texCoords);
 	ggeom.setTextureID(texIds);
 
 	// RENDER LOOP
