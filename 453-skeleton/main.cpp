@@ -16,6 +16,7 @@
 #include "Callback.h"
 #include "GameObject.h"
 #include "SetupObjects.h"
+#include "Animation.h"
 
 int main() {
 	// WINDOW
@@ -31,8 +32,6 @@ int main() {
 	auto callbacks = std::make_shared<MyCallbacks>(shader);
 	window.setCallbacks(callbacks); // can also update callbacks to new ones
 
-	// GL_NEAREST looks a bit better for low-res pixel art than GL_LINEAR.
-	// But for most other cases, you'd want GL_LINEAR interpolation.
 	const unsigned maxDiamonds = 4;
 
 	//SETUP
@@ -46,16 +45,14 @@ int main() {
 	ggeom.setTexCoords(cgeom.texCoords);
 
 	// RENDER LOOP
-	glm::vec4 clickedMousePos = { 0, 0, 0, 1 };
-	const unsigned maxAnimationFrames = 10;
-	unsigned animationCurrentFrame = maxAnimationFrames;
 	int score = 0;
-	glm::mat4 accumulatedMatrix(1.f);
 
 	shader.use();
 	auto loc = glGetUniformLocation(shader.getProgram(), "samplers");
 	int samplers[3] = { 0, 1, 2 };
 	glUniform1iv(loc, 3, samplers);
+	// But for most other cases, you'd want GL_LINEAR interpolation.
+	// GL_NEAREST looks a bit better for low-res pixel art than GL_LINEAR.
 	Texture shipTexture("textures/ship.png", GL_NEAREST);
 	Texture diamondTexture("textures/diamond.png", GL_NEAREST);
 	Texture fireTexture("textures/fire.png", GL_NEAREST);
@@ -71,42 +68,21 @@ int main() {
 		if (callbacks->getRestartFlag() == true)
 		{
 			score = 0;
-			clickedMousePos = { 0, 0, 0, 1 };
 			callbacks->reset();
-			animationCurrentFrame = maxAnimationFrames;
 			setupObjects(ship, gems, maxDiamonds);
 		}
-		if (animationCurrentFrame >= maxAnimationFrames)
-		{
-			//clear the accumulated matrix to stop animating
-			accumulatedMatrix = {
-				1.f, 0.f, 0.f, 0.f,
-				0.f, 1.f, 0.f, 0.f,
-				0.f, 0.f, 1.f, 0.f,
-				0.f,  0.f, 0.f, 1.f
-			};
-		}
-		accumulatedMatrix *= callbackMovementCalculations(callbacks,
-			maxAnimationFrames,
-			animationCurrentFrame,
-			clickedMousePos,
-			ship
-		);
-		ship->transformationMatrix = accumulatedMatrix * ship->transformationMatrix;
-
-
+		setShipMovement(callbacks, ship);
+		ship->update();
 		std::vector<glm::mat4> modelMatrices;
 		std::vector<float> texIds;
-		modelMatrices.push_back(ship->transformationMatrix);
-		texIds.push_back(ship->textureId);
+		modelMatrices.push_back(ship->getTransformationMatrix());
+		texIds.push_back(ship->getTextureId());
 		drawVisibleGems(gems, ship, modelMatrices, texIds, score);
 
 		ggeom.setMatrixTrans(modelMatrices);
 		ggeom.setTextureID(texIds);
 		ggeom.bind();
 		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, texIds.size());
-		
-		animationCurrentFrame++;
 
 		glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
 

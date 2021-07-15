@@ -29,29 +29,6 @@ bool isTouching(const std::shared_ptr<GameObject>& object1,
 	return glm::length(vectorBetweenObjects) <= 0.14;	
 }
 
-void increaseShipSize (std::shared_ptr<GameObject>& ship) {
-	glm::mat4 scalingMatrix = {
-	1.3f, 0.f, 0.f, 0.f,
-	0.f, 1.3f, 0.f, 0.f,
-	0.f, 0.f, 1.f, 0.f,
-	0.f, 0.f, 0.f, 1.f
-	};
-	glm::vec4 shipPosition = ship->getPosition();
-	glm::mat4 negativeTranslation = {
-		1.f, 0.f, 0.f, 0.f,
-		0.f, 1.f, 0.f, 0.f,
-		0.f, 0.f, 1.f, 0.f,
-		-shipPosition.x, -shipPosition.y, 0.f, 1.f
-	};
-	glm::mat4 positiveTranslation = {
-		1.f, 0.f, 0.f, 0.f,
-		0.f, 1.f, 0.f, 0.f,
-		0.f, 0.f, 1.f, 0.f,
-		shipPosition.x, shipPosition.y, 0.f, 1.f
-	};
-	ship->transformationMatrix = positiveTranslation * scalingMatrix * negativeTranslation * ship->transformationMatrix;
-}
-
 void drawVisibleGems(std::vector<std::shared_ptr<Gem>>& gems,
 				std::shared_ptr<GameObject>& ship,
 				std::vector<glm::mat4>& modelMatrices,
@@ -59,16 +36,16 @@ void drawVisibleGems(std::vector<std::shared_ptr<Gem>>& gems,
 				int& score) {
 	for (auto& gem : gems)
 	{
-		if (gem->isVisible)
+		if (gem->getVisibility())
 		{
-			modelMatrices.push_back(gem->transformationMatrix);
-			texIds.push_back(gem->textureId);
-			modelMatrices.push_back(gem->fire.transformationMatrix);
-			texIds.push_back(gem->fire.textureId);
+			modelMatrices.push_back(gem->getTransformationMatrix());
+			texIds.push_back(gem->getTextureId());
+			modelMatrices.push_back(gem->getFire().getTransformationMatrix());
+			texIds.push_back(gem->getFire().getTextureId());
 			if (isTouching(ship, gem))
 			{
-				increaseShipSize(ship);
-				gem->isVisible = false;
+				ship->setScale(ship->getScale()*1.2f);
+				gem->setVisibility(false);
 				score++;
 			}
 		}
@@ -77,28 +54,14 @@ void drawVisibleGems(std::vector<std::shared_ptr<Gem>>& gems,
 void setupObjects(std::shared_ptr<GameObject>& ship,
 				std::vector<std::shared_ptr<Gem>>& gems,
 				const unsigned maxDiamonds) {
-	ship = std::make_shared<GameObject>(
-		glm::mat4{
-			0.09f, 0.f, 0.f, 0.f,
-			0.f, 0.06f, 0.f, 0.f,
-			0.f, 0.f, 1.f, 0.f,
-			0.f, 0.f, 0.f, 1.f
-		}, 0.0
-	);
+	ship = std::make_shared<GameObject>(0.0, glm::vec3(0.0, 0.0, 0.0), 0.07);
 	srand(time(0));
 	gems.clear();
 	for (unsigned diamondIndex = 0; diamondIndex < maxDiamonds; diamondIndex++)
 	{
 		double randomX = rand() * 1.5 / RAND_MAX - 0.75;
 		double randomY = rand() * 1.5 / RAND_MAX - 0.75;
-		auto diamond = std::make_shared<Gem>(
-			glm::mat4{
-				0.07f, 0.f, 0.f, 0.f,
-				0.f, 0.07f, 0.f, 0.f,
-				0.f, 0.f, 1.f, 0.f,
-				randomX, randomY, 0.f, 1.f
-			}
-		);
+		auto diamond = std::make_shared<Gem>(glm::vec3(randomX, randomY, 0.0f), 0.07, 0.035);
 		gems.push_back(diamond);
 	}
 }
