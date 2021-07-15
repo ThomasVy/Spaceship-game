@@ -4,7 +4,7 @@ out vec4 color;
 in vec2 tc;
 in float texIndex;
 
-uniform sampler2D samplers[2];
+uniform sampler2D samplers[3];
 
 void main() {
 	int texID = int(texIndex);
