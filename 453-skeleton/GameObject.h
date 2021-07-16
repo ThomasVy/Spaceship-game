@@ -18,25 +18,31 @@ public:
 	virtual glm::vec3 getPosition() const;
 	virtual float getTheta() const;
 	virtual float getTextureId() const;
-	virtual bool getVisibility() const;
+	virtual bool getCollectable() const;
 	virtual float getScale() const;
 	virtual glm::mat4 getTransformationMatrix() const;
 	virtual glm::vec3 getHeading() const;
+	virtual std::vector<std::shared_ptr<GameObject>> getChildren() const;
 
 	virtual void setPosition(const glm::vec3& pos);
 	virtual void setTheta(const float angle);
 	virtual void setTextureId(const float texId);
-	virtual void setVisibility(const bool visibility);
+	virtual void setCollectable(const bool collectable);
 	virtual void setScale(const float scale);
-	virtual void setParentObject(std::shared_ptr<GameObject>& parentObject);
+	virtual void setParentObject(const std::shared_ptr<GameObject>& parentObject);
+	virtual void addChild(const std::shared_ptr<GameObject>& childObject);
 	virtual void update() = 0;
 protected:
-	bool isVisible = true;
+	virtual glm::mat4 getTranslationMatrix() const;
+	virtual glm::mat4 getRotationMatrix() const;
+	virtual glm::mat4 getScaleMatrix() const;
+	bool collectable = true;
 	float textureId;
 	glm::vec3 position = {0.f, 0.f, 0.f};
 	float theta = 0.0f;
 	float scale = 1.0f;
 	std::shared_ptr<GameObject> parentObject;
+	std::vector<std::shared_ptr<GameObject>> childObjects;
 };
 
 class Ship : public GameObject {
@@ -60,11 +66,8 @@ public:
 		const std::shared_ptr<GameObject>& parentObject);
 	void update() override;
 	void setAnimation(std::function<void(GameObject*)>& ani);
-	void setChild(const std::shared_ptr<GameObject>& childObject);
-	std::shared_ptr<GameObject> getChild();
 private:
 	std::function<void(GameObject*)> animation;
-	std::shared_ptr<GameObject> childObject = nullptr;
 };
 
 class Fire : public GameObject {
@@ -74,6 +77,7 @@ public:
 		const float length,
 		const std::shared_ptr<GameObject>& parentObject);
 	void update() override;
+	void setLength(float length);
 private:
 	float rotateAngle = 0;
 	float length;

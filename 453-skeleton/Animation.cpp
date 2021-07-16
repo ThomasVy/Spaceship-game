@@ -24,3 +24,27 @@ void moveShip(const std::shared_ptr<MyCallbacks>& callbacks, std::shared_ptr<Shi
 		ship->setTargetTheta(dot);
 	}
 }
+
+void rotateClockwise(GameObject* object) {
+	const float ANGLE_STEP = glm::radians(360.0f) / (60.0f * 5.0f);
+	float rotateAngle = object->getTheta() - ANGLE_STEP;
+	if (rotateAngle > glm::radians(360.0)) {
+		rotateAngle -= glm::radians(360.0);
+	}
+	object->setTheta(rotateAngle);
+}
+
+void update(std::shared_ptr<Ship>& ship,
+	std::vector<std::shared_ptr<Gem>>& gems,
+	std::vector<std::shared_ptr<Fire>>& fires,
+	bool gameOver) {
+	for (auto& fire : fires) {
+		fire->update();
+	}
+	for (auto& gem : gems) {
+		gem->update();
+	}
+	if (!gameOver) {
+		ship->update();
+	}
+}

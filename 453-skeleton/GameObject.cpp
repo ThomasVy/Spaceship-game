@@ -25,8 +25,8 @@ float GameObject::getTheta() const {
 float GameObject::getTextureId() const {
 	return textureId;
 }
-bool GameObject::getVisibility() const {
-	return isVisible;
+bool GameObject::getCollectable() const {
+	return collectable;
 }
 float GameObject::getScale() const {
 	return scale;
@@ -36,7 +36,7 @@ glm::vec3 GameObject::getHeading() const {
 	glm::mat4 rotationMatrix = glm::rotate(identityMatrix, theta, glm::vec3(0.0f, 0.0f, 1.0f));
 	return rotationMatrix * glm::vec4(0, 1, 0, 0);
 }
-void GameObject::setParentObject(std::shared_ptr<GameObject>& parentObject) {
+void GameObject::setParentObject(const std::shared_ptr<GameObject>& parentObject) {
 	this->parentObject = parentObject;
 }
 void GameObject::setPosition(const glm::vec3& pos) {
@@ -48,24 +48,29 @@ void GameObject::setTheta(const float angle) {
 void GameObject::setTextureId(const float texId) {
 	textureId = texId;
 }
-void GameObject::setVisibility(const bool visibility) {
-	isVisible = visibility;
+void GameObject::setCollectable(const bool collectable) {
+	this->collectable = collectable;
 }
 void GameObject::setScale(const float scale) {
 	this->scale = scale;
 }
 glm::mat4 GameObject::getTransformationMatrix() const {
-	glm::mat4 identityMatrix(1.0f);
-	glm::mat4 translation = glm::translate(identityMatrix, position);
-	glm::mat4 rotationMatrix = glm::rotate(identityMatrix, theta, glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 scaleMatrix = glm::scale(identityMatrix, glm::vec3(scale, scale, 1.0f));
-	if (parentObject == nullptr) {
-		return translation * rotationMatrix * scaleMatrix;
-	}
-	else {
-		return glm::translate(identityMatrix, parentObject->getPosition()) * translation * rotationMatrix * scaleMatrix;
-	}
+	return getTranslationMatrix() * getRotationMatrix() * getScaleMatrix();
 }
+
+glm::mat4 GameObject::getTranslationMatrix() const {
+	if (parentObject != nullptr) {
+		return parentObject->getTranslationMatrix() * glm::translate(glm::mat4(1.0f), position);
+	}
+	return glm::translate(glm::mat4(1.0f), position);
+}
+glm::mat4 GameObject::getRotationMatrix() const {
+	return glm::rotate(glm::mat4(1.0f), theta, glm::vec3(0.0f, 0.0f, 1.0f));
+}
+glm::mat4 GameObject::getScaleMatrix() const {
+	return glm::scale(glm::mat4(1.0f), glm::vec3(scale, scale, 1.0f));
+}
+
 Ship::Ship(const glm::vec3& position, const float scale)
 	: GameObject(0.0, position, scale, nullptr)
 {}
@@ -102,6 +107,13 @@ void Ship::update() {
 			ANGLE_STEP = -ANGLE_STEP;
 		}
 		theta += ANGLE_STEP;
+
+		for (int childIndex = 0; childIndex < childObjects.size(); childIndex++) {
+			int childNumber = childIndex + 1;
+			float childFactor = 0.25f + childNumber * 0.1;
+			childObjects[childIndex]->setPosition(childFactor*-getHeading());
+		}
+
 		if (theta > glm::radians(180.0)) {
 			theta -= glm::radians(360.0);
 		}
@@ -132,11 +144,12 @@ void Gem::setAnimation(std::function<void(GameObject*)>& ani) {
 void Gem::update() {
 	animation(this);
 }
-void Gem::setChild(const std::shared_ptr<GameObject>& childObject) {
-	this->childObject = childObject;
+void GameObject::addChild(const std::shared_ptr<GameObject>& childObject) {
+	childObjects.push_back(childObject);
 }
-std::shared_ptr<GameObject> Gem::getChild() {
-	return childObject;
+
+std::vector<std::shared_ptr<GameObject>> GameObject::getChildren() const {
+	return childObjects;
 }
 
 Fire::Fire(const glm::vec3& pos,
@@ -153,4 +166,8 @@ void Fire::update() {
 	if (rotateAngle > glm::radians(360.0)) {
 		rotateAngle -= glm::radians(360.0);
 	}
+}
+
+void Fire::setLength(float length) {
+	this->length = length;
 }

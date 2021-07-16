@@ -32,7 +32,7 @@ int main() {
 	auto callbacks = std::make_shared<MyCallbacks>(shader);
 	window.setCallbacks(callbacks); // can also update callbacks to new ones
 
-	const unsigned maxDiamonds = 4;
+	const unsigned maxDiamonds = 5;
 
 	//SETUP
 	std::shared_ptr<Ship> ship;
@@ -74,26 +74,23 @@ int main() {
 			gameOver = false;
 		}
 		if (!gameOver) {
-			moveShip(callbacks, ship);
-			ship->update();
-			for (auto& fire : fires) {
-				fire->update();
-			}
 			lose = checkGameProgression(ship, gems, fires, score);
-			std::vector<glm::mat4> modelMatrices;
-			std::vector<float> texIds;
-			setMatricesAndTextures(gems,
-				ship,
-				modelMatrices,
-				fires,
-				texIds);
-			ggeom.setMatrixTrans(modelMatrices);
-			ggeom.setTextureID(texIds);
-			ggeom.bind();
-			glDrawArraysInstanced(GL_TRIANGLES, 0, 6, texIds.size());
-
-			glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
+			moveShip(callbacks, ship);
 		}
+		update(ship, gems, fires, gameOver);
+		std::vector<glm::mat4> modelMatrices;
+		std::vector<float> texIds;
+		setMatricesAndTextures(gems,
+			ship,
+			modelMatrices,
+			fires,
+			texIds);
+		ggeom.setMatrixTrans(modelMatrices);
+		ggeom.setTextureID(texIds);
+		ggeom.bind();
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, texIds.size());
+
+		glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
 		imguiSetup();
 		drawScoreBoard(score);
 		if (score == maxDiamonds) {
