@@ -4,6 +4,8 @@ void imguiSetup();
 
 void drawWinScreen();
 
+void drawLoseScreen();
+
 void drawScoreBoard(const int score);
 
 void imguiRender();

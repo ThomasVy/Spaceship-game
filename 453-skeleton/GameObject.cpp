@@ -1,14 +1,23 @@
 #include "GameObject.h"
 #include <glm/gtx/transform.hpp>
 
-GameObject::GameObject(const float textureId, const glm::vec3& position, const float scale)
+GameObject::GameObject(const float textureId,
+	const glm::vec3& position,
+	const float scale,
+	const std::shared_ptr<GameObject>& parentObject)
 	: textureId(textureId)
 	, position(position)
 	, scale(scale)
+	, parentObject(parentObject)
 {}
 
 glm::vec3 GameObject::getPosition() const {
-	return position;
+	if (parentObject == nullptr) {
+		return position;
+	}
+	else {
+		return parentObject->getPosition() + position;
+	}
 }
 float GameObject::getTheta() const {
 	return theta;
@@ -27,15 +36,14 @@ glm::vec3 GameObject::getHeading() const {
 	glm::mat4 rotationMatrix = glm::rotate(identityMatrix, theta, glm::vec3(0.0f, 0.0f, 1.0f));
 	return rotationMatrix * glm::vec4(0, 1, 0, 0);
 }
-MovementDirection GameObject::getMoving() const {
-	return movementDirection;
+void GameObject::setParentObject(std::shared_ptr<GameObject>& parentObject) {
+	this->parentObject = parentObject;
 }
-
 void GameObject::setPosition(const glm::vec3& pos) {
 	position = pos;
 }
 void GameObject::setTheta(const float angle) {
-	theta = theta;
+	theta = angle;
 }
 void GameObject::setTextureId(const float texId) {
 	textureId = texId;
@@ -46,18 +54,32 @@ void GameObject::setVisibility(const bool visibility) {
 void GameObject::setScale(const float scale) {
 	this->scale = scale;
 }
-void GameObject::setTargetTheta(const float target){
-	targetTheta = target;
+glm::mat4 GameObject::getTransformationMatrix() const {
+	glm::mat4 identityMatrix(1.0f);
+	glm::mat4 translation = glm::translate(identityMatrix, position);
+	glm::mat4 rotationMatrix = glm::rotate(identityMatrix, theta, glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 scaleMatrix = glm::scale(identityMatrix, glm::vec3(scale, scale, 1.0f));
+	if (parentObject == nullptr) {
+		return translation * rotationMatrix * scaleMatrix;
+	}
+	else {
+		return glm::translate(identityMatrix, parentObject->getPosition()) * translation * rotationMatrix * scaleMatrix;
+	}
 }
-void GameObject::setMoving(const MovementDirection move) {
-	movementDirection = move;
+Ship::Ship(const glm::vec3& position, const float scale)
+	: GameObject(0.0, position, scale, nullptr)
+{}
+MovementDirection Ship::getMoving() const {
+	return movementDirection;
 }
-
-void GameObject::update() {
-	float ANGLE_STEP = glm::radians(360.0f)/(60.0f * 5.0f);
+float Ship::getTargetTheta() const {
+	return targetTheta;
+}
+void Ship::update() {
+	float ANGLE_STEP = glm::radians(360.0f) / (60.0f * 5.0f);
 	const float SPEED = 2.0 / (60.f * 10.0f);
 	//update position
-	switch (movementDirection)
+	switch (getMoving())
 	{
 	case MovementDirection::Forward:
 		position += SPEED * getHeading();
@@ -84,23 +106,51 @@ void GameObject::update() {
 			theta -= glm::radians(360.0);
 		}
 		else if (theta < glm::radians(-180.0)) {
-			theta += glm::radians (360.0);
+			theta += glm::radians(360.0);
 		}
 	}
 }
-glm::mat4 GameObject::getTransformationMatrix() const {
-	glm::mat4 identityMatrix(1.0f);
-	glm::mat4 transformationMatrix = glm::translate(identityMatrix, position);
-	glm::mat4 rotationMatrix = glm::rotate(identityMatrix, theta, glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 scaleMatrix = glm::scale(identityMatrix, glm::vec3(scale, scale, 1.0f));
-	return transformationMatrix * rotationMatrix * scaleMatrix;
+void Ship::setTargetTheta(const float target){
+	targetTheta = target;
+}
+void Ship::setMoving(const MovementDirection move) {
+	movementDirection = move;
 }
 
-Gem::Gem(const glm::vec3& gemPos, const float gemScale, const float fireScale)
-	: GameObject(1.0, gemPos, gemScale)
-	, fire(2.0, glm::vec3(gemPos.x+0.15, gemPos.y, gemPos.z), fireScale)
+Gem::Gem(const glm::vec3& gemPos,
+		const float gemScale,
+		std::function<void(GameObject*)>& ani,
+		const std::shared_ptr<GameObject>& parentObject)
+	: GameObject(1.0, gemPos, gemScale, parentObject)
+	, animation(ani)
 {}
 
-GameObject& Gem::getFire() {
-	return fire;
+void Gem::setAnimation(std::function<void(GameObject*)>& ani) {
+	animation = ani;
+}
+
+void Gem::update() {
+	animation(this);
+}
+void Gem::setChild(const std::shared_ptr<GameObject>& childObject) {
+	this->childObject = childObject;
+}
+std::shared_ptr<GameObject> Gem::getChild() {
+	return childObject;
+}
+
+Fire::Fire(const glm::vec3& pos,
+			const float scale,
+			const float len,
+			const std::shared_ptr<GameObject>& parentObject)
+	: GameObject(2.0, pos, scale, parentObject)
+	, length(len) {}
+
+void Fire::update() {
+	const float ROTATION_STEP = glm::radians(360.0f) / (60.0f * 5.0f);
+	rotateAngle += ROTATION_STEP;
+	position = { length * std::cos(rotateAngle), length * std::sin(rotateAngle), 0.0f };
+	if (rotateAngle > glm::radians(360.0)) {
+		rotateAngle -= glm::radians(360.0);
+	}
 }

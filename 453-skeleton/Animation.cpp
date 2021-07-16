@@ -2,7 +2,8 @@
 #include "Animation.h"
 #include "Callback.h"
 #include "GameObject.h"
-void setShipMovement(const std::shared_ptr<MyCallbacks>& callbacks, std::shared_ptr<GameObject>& ship) {
+#include <glm/gtx/transform.hpp>
+void moveShip(const std::shared_ptr<MyCallbacks>& callbacks, std::shared_ptr<Ship>& ship) {
 	ship->setMoving(MovementDirection::NoMovement);
 	if (callbacks->getSDown()) {
 		ship->setMoving(MovementDirection::Backward);

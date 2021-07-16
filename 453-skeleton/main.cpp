@@ -35,9 +35,10 @@ int main() {
 	const unsigned maxDiamonds = 4;
 
 	//SETUP
-	std::shared_ptr<GameObject> ship;
+	std::shared_ptr<Ship> ship;
 	std::vector<std::shared_ptr<Gem>> gems;
-	setupObjects(ship, gems, maxDiamonds);
+	std::vector<std::shared_ptr<Fire>> fires;
+	setupObjects(ship, gems, fires, maxDiamonds);
 
 	const CPU_Geometry cgeom = createGeom();
 	GPU_Geometry ggeom;
@@ -46,7 +47,7 @@ int main() {
 
 	// RENDER LOOP
 	int score = 0;
-
+	bool gameOver = false, lose = false;
 	shader.use();
 	auto loc = glGetUniformLocation(shader.getProgram(), "samplers");
 	int samplers[3] = { 0, 1, 2 };
@@ -69,27 +70,39 @@ int main() {
 		{
 			score = 0;
 			callbacks->reset();
-			setupObjects(ship, gems, maxDiamonds);
+			setupObjects(ship, gems, fires, maxDiamonds);
+			gameOver = false;
 		}
-		setShipMovement(callbacks, ship);
-		ship->update();
-		std::vector<glm::mat4> modelMatrices;
-		std::vector<float> texIds;
-		modelMatrices.push_back(ship->getTransformationMatrix());
-		texIds.push_back(ship->getTextureId());
-		drawVisibleGems(gems, ship, modelMatrices, texIds, score);
+		if (!gameOver) {
+			moveShip(callbacks, ship);
+			ship->update();
+			for (auto& fire : fires) {
+				fire->update();
+			}
+			lose = checkGameProgression(ship, gems, fires, score);
+			std::vector<glm::mat4> modelMatrices;
+			std::vector<float> texIds;
+			setMatricesAndTextures(gems,
+				ship,
+				modelMatrices,
+				fires,
+				texIds);
+			ggeom.setMatrixTrans(modelMatrices);
+			ggeom.setTextureID(texIds);
+			ggeom.bind();
+			glDrawArraysInstanced(GL_TRIANGLES, 0, 6, texIds.size());
 
-		ggeom.setMatrixTrans(modelMatrices);
-		ggeom.setTextureID(texIds);
-		ggeom.bind();
-		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, texIds.size());
-
-		glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
-
+			glDisable(GL_FRAMEBUFFER_SRGB); // disable sRGB for things like imgui
+		}
 		imguiSetup();
 		drawScoreBoard(score);
 		if (score == maxDiamonds) {
 			drawWinScreen();
+			gameOver = true;
+		}
+		else if (lose) {
+			drawLoseScreen();
+			gameOver = true;
 		}
 		imguiRender();
 

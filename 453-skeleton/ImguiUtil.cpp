@@ -16,6 +16,12 @@ void drawWinScreen() {
 	ImGui::Text("Press R to restart");
 }
 
+void drawLoseScreen() {
+	ImGui::SetWindowFontScale(5.f);
+	ImGui::Text("Game over. Better luck next Time.");
+	ImGui::Text("Press R to restart");
+}
+
 void drawScoreBoard(const int score) {
 	// Putting the text-containing window in the top-left of the screen.
 	ImGui::SetNextWindowPos(ImVec2(5, 5));
