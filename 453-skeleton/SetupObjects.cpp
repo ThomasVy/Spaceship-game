@@ -95,7 +95,9 @@ void setupObjects(std::shared_ptr<Ship>& ship,
 	for (unsigned diamondIndex = 0; diamondIndex < maxDiamonds; diamondIndex++)
 	{
 		double randomX = rand() * 1.8 / RAND_MAX - 0.90;
+		while (abs(randomX) < 0.15) randomX = rand() * 1.8 / RAND_MAX - 0.90;
 		double randomY = rand() * 1.8 / RAND_MAX - 0.90;
+		while (abs(randomY) < 0.15) randomY = rand() * 1.8 / RAND_MAX - 0.90;
 		std::function<void(GameObject*)> diamondAni = [](GameObject*) {};
 		auto diamond = std::make_shared<Gem>(glm::vec3(randomX, randomY, 0.0f), 0.07, diamondAni, nullptr);
 		auto fire = std::make_shared<Fire>(glm::vec3(0.15, 0, 0), 0.035, 0.15, diamond);
