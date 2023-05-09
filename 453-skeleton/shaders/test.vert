@@ -5,7 +5,7 @@ layout (location = 2) in float texID;
 layout (location = 3) in mat4 transformationMatrix;
 
 out vec2 tc;
-out float texIndex;
+flat out float texIndex;
 
 void main() {
 	tc = texCoord;
