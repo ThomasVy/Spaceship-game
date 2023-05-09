@@ -2,7 +2,7 @@
 out vec4 color;
 
 in vec2 tc;
-in float texIndex;
+flat in float texIndex;
 
 uniform sampler2D samplers[3];
 
